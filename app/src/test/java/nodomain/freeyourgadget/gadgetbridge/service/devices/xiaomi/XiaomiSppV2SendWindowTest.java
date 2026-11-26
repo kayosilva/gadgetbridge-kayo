@@ -81,4 +81,38 @@ public class XiaomiSppV2SendWindowTest {
         Assert.assertEquals(-1, window.getOldestUnacked());
         Assert.assertEquals(0, window.nextSequenceNumber());
     }
+
+    @Test
+    public void awaitRoomReturnsAtOnceWhenBelowTheLimit() {
+        final XiaomiSppV2SendWindow window = new XiaomiSppV2SendWindow();
+        send(window, 1);
+
+        Assert.assertTrue(window.awaitRoom(2, 0));
+    }
+
+    @Test
+    public void awaitRoomTimesOutWhileNothingIsAcked() {
+        final XiaomiSppV2SendWindow window = new XiaomiSppV2SendWindow();
+        send(window, 1);
+
+        Assert.assertFalse(window.awaitRoom(1, 50));
+    }
+
+    @Test
+    public void awaitRoomWakesUpOnAck() throws InterruptedException {
+        final XiaomiSppV2SendWindow window = new XiaomiSppV2SendWindow();
+        send(window, 1);
+
+        final Thread acker = new Thread(() -> {
+            try {
+                Thread.sleep(50);
+            } catch (final InterruptedException ignored) {
+            }
+            window.onAck(0);
+        });
+        acker.start();
+
+        Assert.assertTrue(window.awaitRoom(1, 5_000));
+        acker.join();
+    }
 }

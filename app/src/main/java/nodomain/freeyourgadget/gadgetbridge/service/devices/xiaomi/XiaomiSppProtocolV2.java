@@ -57,10 +57,11 @@ public class XiaomiSppProtocolV2 extends AbstractXiaomiSppProtocol {
     static final long RESEND_TIMEOUT_MILLIS = 10_000L;
     /// Resend timeouts in a row without any ack before the link is considered dead.
     static final int MAX_TIMEOUTS_WITHOUT_ACK = 3;
-    /// Data frames allowed in flight before waiting for an ack. Some watches (e.g. Redmi Watch 5 Lite)
-    /// reset the connection when bulk uploads (watchfaces) are sent without waiting for acks.
-    static final int MAX_IN_FLIGHT = 1;
-    /// Upper bound for waiting on an ack before sending anyway (resend logic takes over).
+    /// Data frames allowed in flight before the next one waits for an ack. The Redmi Watch 5 Lite
+    /// acks each 4 KiB upload chunk only after ~1.25 s and drops the connection when a watchface
+    /// upload is written in one burst.
+    static final int MAX_DATA_PACKETS_IN_FLIGHT = 1;
+    /// Upper bound for that wait; after it the packet is sent anyway and the resend logic takes over.
     static final long IN_FLIGHT_WAIT_MILLIS = 3_000L;
 
     private final XiaomiSppSupport support;
@@ -98,6 +99,11 @@ public class XiaomiSppProtocolV2 extends AbstractXiaomiSppProtocol {
                 0
         );
         return percentage > 0 && ThreadLocalRandom.current().nextInt(100) < percentage;
+    }
+
+    @VisibleForTesting
+    protected int maxDataPacketsInFlight() {
+        return MAX_DATA_PACKETS_IN_FLIGHT;
     }
 
     private void sendAck(final int sequenceNumber) {
@@ -319,7 +325,7 @@ public class XiaomiSppProtocolV2 extends AbstractXiaomiSppProtocol {
                 .getPacketPayloadBytes(support.getAuthService());
 
         return new FunctionAction(socket -> {
-            if (!sendWindow.awaitRoom(MAX_IN_FLIGHT, IN_FLIGHT_WAIT_MILLIS)) {
+            if (!sendWindow.awaitRoom(maxDataPacketsInFlight(), IN_FLIGHT_WAIT_MILLIS)) {
                 LOG.warn("no ack for packet {} within {} ms, sending next packet anyway",
                         sendWindow.getOldestUnacked(), IN_FLIGHT_WAIT_MILLIS);
             }

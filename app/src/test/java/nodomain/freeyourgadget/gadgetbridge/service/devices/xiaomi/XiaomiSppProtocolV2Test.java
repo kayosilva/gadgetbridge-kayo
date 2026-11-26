@@ -83,6 +83,12 @@ public class XiaomiSppProtocolV2Test extends TestBase {
             protected boolean simulatePacketLoss(final boolean outbound) {
                 return outbound ? dropOutbound : dropInbound;
             }
+
+            @Override
+            protected int maxDataPacketsInFlight() {
+                // the tests below exercise go-back-N with many packets in flight
+                return XiaomiSppV2SendWindow.MAX_TRACKED_FRAMES;
+            }
         };
     }
 
